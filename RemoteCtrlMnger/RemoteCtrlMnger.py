@@ -20,17 +20,19 @@ CAMERA_DIR = 'http://%s/camera/'%(CDN_SERVER)
 def send_http_resp(conn,resp):
     logging.info("resp:"+resp)
     header = '''HTTP/1.1 200 OK
-Date: Mon, 27 Jul 2009 12:28:53 GMT
-Server: Clark
-Last-Modified: Wed, 22 Jul 2009 19:15:56 GMT
-ETag: "34aa387-d-1568eb00"
-Accept-Ranges: bytes
+Server: nginx/1.4.4
+Date: Thu, 08 May 2014 %s GMT
+Content-Type: text/html; charset=utf-8
 Content-Length: %d
+Last-Modified: Thu, 08 May 2014 %s GMT
+Connection: keep-alive
+ETag: "536b7bf9-4"
+Accept-Ranges: bytes
 
-'''%(len(resp))
+'''%(datetime.datetime.now().strftime('%H:%M:%S'),len(resp),datetime.datetime.now().strftime('%H:%M:%S'))
 
     
-    content = header + resp
+    content = header + resp + '\n'
     logging.info(content)
     conn.send(content)
     
@@ -232,7 +234,7 @@ def worker(no,conn):
     '''
     try:
         r = conn.recv(512)
-        #logging.info(r)
+        logging.info(r)
         if(r.find("cmd") >= 0):
             logging.info("thread %s start for monitor..."%(threading.currentThread().getName()))
             do_HTTP_request(conn, r)
