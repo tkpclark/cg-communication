@@ -89,7 +89,7 @@ if __name__ == "__main__":
 	app = QApplication(sys.argv) 
 	
 	thread.start_new_thread(start_RomoteCmdExer, ()) 
-	time.sleep(1)
+	time.sleep(10)
 	
 	
 	
