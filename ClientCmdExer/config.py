@@ -10,6 +10,6 @@ ftp_password = 'ff'
 ftp_upload_path = 'snapshot'
 local_snapshot = './snapshot'
 bandwidth_url = 'http://112.124.98.113/metrojs.js'#测试带宽时用来下载的文件
-version = '1.04'
+version = '1.05'
 
 #1.04 增加ping的取值（正则）

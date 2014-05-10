@@ -11,11 +11,13 @@ import ast
 from logging.handlers import RotatingFileHandler
 from config import *
 import fcntl
+import signal
 
 LOGIN_LIST = []
 CMD_LIST = {}
 SNAPSHOT_DIR = 'http://%s/snapshot/'%(CDN_SERVER)
 CAMERA_DIR = 'http://%s/camera/'%(CDN_SERVER)
+
 
 def send_http_resp(conn,resp):
     logging.info("resp:"+resp)
@@ -183,7 +185,7 @@ def do_HTTP_request(conn, r):
     
 def do_login_request(conn, r):
     
-    logging.info(r)
+    #logging.info(r)
     
     if(r.find(',') < 0):
         conn.send("login arguments error! [%s]"%(r))
@@ -236,14 +238,14 @@ def worker(no,conn):
         r = conn.recv(512)
         logging.info(r)
         if(r.find("cmd") >= 0):
-            logging.info("thread %s start for monitor..."%(threading.currentThread().getName()))
+            #logging.info("thread %s start for monitor..."%(threading.currentThread().getName()))
             do_HTTP_request(conn, r)
             conn.close()
         elif(r.find("login") >= 0):
-            logging.info("thread %s start for client..."%(threading.currentThread().getName()))
+            #logging.info("thread %s start for client..."%(threading.currentThread().getName()))
             do_login_request(conn, r)
         elif(r.find("online_list") >= 0):
-            logging.info("thread %s start..."%(threading.currentThread().getName()))
+            #logging.info("thread %s start..."%(threading.currentThread().getName()))
             do_online_list(conn, r)
         elif(r.find("online_number") >= 0):
             do_online_number(conn, r)
@@ -252,6 +254,20 @@ def worker(no,conn):
             conn.close()
     except:
         pass
+
+def myrecv(conn):
+    for i in range(10):
+        #logging.info("i:%d"%(i))
+        try:
+            resp = conn.recv(2,socket.MSG_DONTWAIT)
+            #resp = conn.recv(20)
+            if(resp == 'on'):
+                return True
+            else:
+                time.sleep(0.2)
+        except:
+            time.sleep(0.2)
+    return False
     
 def checker():
     global LOGIN_LIST
@@ -259,14 +275,24 @@ def checker():
         del_flag = 0
         for index in range(len(LOGIN_LIST)):
             try:
+                #logging.info("checking %s"%(LOGIN_LIST[index][0]))
+                #no need to check when other cmd is running
+                if(LOGIN_LIST[index][2] == 1):
+                    continue
                 LOGIN_LIST[index][1].send("heartbeat")
+                
+                if(myrecv(LOGIN_LIST[index][1]) == False):
+                    raise Exception
+                #logging.info("ok!");
             except:
+                logging.info("%s detached!"%(LOGIN_LIST[index][0]))
                 del LOGIN_LIST[index]
                 del_flag = 1
                 break
         
         if(del_flag == 0):
             #logging.info(len(LOGIN_LIST))
+            #logging.info("----------------")
             time.sleep(10)
 
 

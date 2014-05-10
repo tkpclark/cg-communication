@@ -199,6 +199,7 @@ def main():
 						sys.exit(0)
 						
 					if(data == 'heartbeat'):
+						sock.send('on')
 						continue
 						
 					if(cmd.has_key(data)):
