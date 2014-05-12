@@ -11,8 +11,9 @@ import subprocess
 import urllib
 from config import *
 import threading
+import multiprocessing
 import re
-
+from VideoCapture import Device  
 
 
 #function of Get CPU State  
@@ -88,7 +89,7 @@ def get_snapshot():
 	
 	global terminal_number
 	img = ImageGrab.grab()
-	filename = '%s.%s.jpg'%(terminal_number, time.time())
+	filename = '%s.%s.snap.jpg'%(terminal_number, time.time())
 	img.save(filename)
 	ftp_up(filename)
 	os.system('del %s'%(filename))
@@ -96,8 +97,27 @@ def get_snapshot():
 	
 	return filename
 
+def take_phone(filename):
+	
+	cam = Device()  
+	cam.saveSnapshot(filename, timestamp=3)
+	
 def get_camera_img():
-	pass
+	
+	global terminal_number
+	filename = '%s.%s.camera.jpg'%(terminal_number, time.time())
+	try:
+		p = multiprocessing.Process(target=take_phone, args=(filename,))
+		p.start()
+		p.join()
+		ftp_up(filename)
+		os.system('del %s'%(filename))
+		return filename
+	except:
+		return 'fail.jpg'
+
+	
+
 #===============
 def cmd_101():
 	return 'returncode=1&returnmsg=ok'	
@@ -125,7 +145,7 @@ def cmd_103():
 	status_info['ping'] = get_ping()
 	status_info['bandwidth'] = get_bandwidth()
 	status_info['snapshot_name'] = get_snapshot()
-	status_info['camera_img_name'] = get_snapshot()
+	status_info['camera_img_name'] = get_camera_img()
 	
 	return 'returncode=1&returnmsg=%s'%(status_info)
 
@@ -157,7 +177,8 @@ def handler(data,sock):
 	except Exception, e:
 		print e
 		sock.send('returncode=0&returnmsg=内部错误:[%s]'%(e))
-	
+
+			
 def main():
    
 	cmd['101'] = 'cmd_101';
@@ -168,7 +189,8 @@ def main():
 	cmd['106'] = 'cmd_106';
 	cmd['107'] = 'cmd_107';
 	cmd['108'] = 'cmd_108';
-
+	
+	
 
 	while True:
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
@@ -203,10 +225,8 @@ def main():
 						continue
 						
 					if(cmd.has_key(data)):
-						t= threading.Thread(target=handler, args=(data,sock))
-						t.start()
-						#handler(data,sock)
-						
+						threading.Thread(target=handler, args=(data,sock)).start()
+				
 				except Exception, e:
 					print e
 					raise Exception
