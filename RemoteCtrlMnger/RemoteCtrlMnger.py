@@ -14,10 +14,10 @@ import fcntl
 import signal
 
 LOGIN_LIST = []
+#LOGIN_LIST.append(['T55-clark', 'xxx',0])
 CMD_LIST = {}
-SNAPSHOT_DIR = 'http://%s/snapshot/'%(CDN_SERVER)
-CAMERA_DIR = 'http://%s/camera/'%(CDN_SERVER)
-
+IMG_DIR = 'http://%s/terminal_images/'%(CDN_SERVER)
+timeout=100
 
 def send_http_resp(conn,resp):
     logging.info("resp:"+resp)
@@ -35,7 +35,7 @@ Accept-Ranges: bytes
 
     
     content = header + resp + '\n'
-    logging.info(content)
+    #logging.info(content)
     conn.send(content)
     
 def write_success_to_db(str, target):
@@ -43,7 +43,7 @@ def write_success_to_db(str, target):
     #time_sec = time.time()
     #now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time_sec))+datetime.datetime.now().microsecond
     #logging.info("now:%s"%(now))
-    logging.info(str)
+    #logging.info(str)
     state = ast.literal_eval(str.split('returnmsg=')[1])
     sql="insert into lich_ne_state \
         (number,os,version,cpu_utility,available_mem,available_disk,temperature,air_condition_state,bandwidth,ping,ap_state,create_time,update_time,snapshot_name,camera_img_name) \
@@ -59,10 +59,10 @@ def write_success_to_db(str, target):
          state['bandwidth'],\
          state['ping'],\
          state['ap_state'],\
-         SNAPSHOT_DIR+state['snapshot_name'],\
-         SNAPSHOT_DIR+state['camera_img_name'])
+         IMG_DIR+state['snapshot_name'],\
+         IMG_DIR+state['camera_img_name'])
     #print sql
-    logging.info(sql)
+    #logging.info(sql)
     try:
         mysql = Mydb(host, user, password)
         mysql.selectDb(db_name)
@@ -72,8 +72,8 @@ def write_success_to_db(str, target):
     mysql.close()
 
 def write_fail_to_db(target):
-    sql = "insert into lich_ne_state (number,ping,create_time,update_time) values('%s','0',NOW(),NOW())"%(target);
-    logging.info(sql)
+    sql = "insert into lich_ne_state (number,ping,create_time,update_time) values('%s','0',NOW(),NOW())"%(target)
+    #logging.info(sql)
     try:
         mysql = Mydb(host, user, password)
         mysql.selectDb(db_name)
@@ -87,22 +87,48 @@ def cmd_101(target, conn, cmd):
     return conn.recv(512)
 
 def cmd_102(target, conn, cmd):
-    conn.send(cmd)
-    return conn.recv(512)
-
-def cmd_103(target, conn, cmd):#collet_client_state
+    global timeout
     try:
        
         conn.send(cmd)
-        re = conn.recv(512)
         
+        re = myrecv(conn,timeout,512)
+        #re = conn.recv(512)
+        logging.info("retrun from %s:%s"%(target,re))
+        if(re == 'timeout'):
+            raise Exception
         #write db when success
         if (re.find("returncode=1") >= 0):
-            write_success_to_db(re, target)
-            
+            pass
+        else:
+            raise Exception
         return re 
     
     except Exception, e:
+        #logging.info("re:%d"%(re))
+        logging.info(e)
+        return 'returncode=0&returnmsg=%s'%(e)
+
+def cmd_103(target, conn, cmd):#collet_client_state
+    global timeout
+    try:
+       
+        conn.send(cmd)
+        
+        re = myrecv(conn,timeout,512)
+        #re = conn.recv(512)
+        logging.info("retrun from %s:%s"%(target,re))
+        if(re == 'timeout'):
+            raise Exception
+        #write db when success
+        if (re.find("returncode=1") >= 0):
+            write_success_to_db(re, target)
+        else:
+            raise Exception
+        return re 
+    
+    except Exception, e:
+        #logging.info("re:%d"%(re))
         logging.info(e)
         write_fail_to_db(target)
         return 'returncode=0&returnmsg=%s'%(e)
@@ -178,7 +204,7 @@ def do_HTTP_request(conn, r):
     
     logging.info(argu)
     re = request_client_cmd(argu['cmd'], argu['target'])
-    logging.info(re)
+    #logging.info(re)
     send_http_resp(conn,re)
     #conn.send("returncode=1&returnmsg=ok")
   
@@ -199,16 +225,19 @@ def do_login_request(conn, r):
     
     for index in range(len(LOGIN_LIST)):
         if (LOGIN_LIST[index][0] == terminal_number):
-            LOGIN_LIST[index][1].send("quit")
-            LOGIN_LIST[index][1]=conn
+            try:
+                LOGIN_LIST[index][1].send("quit")
+            except Exception, e:
+                logging.info(e)
             del LOGIN_LIST[index]
             break
             
     
     #
+    conn.send("ok")
     LOGIN_LIST.append([terminal_number, conn,0])
     #logging.info(LOGIN_LIST)
-    conn.send("ok")
+    
  
 def do_online_list(conn,r):
     global LOGIN_LIST
@@ -222,7 +251,7 @@ def do_online_list(conn,r):
 
 def do_online_number(conn,r):
     online_number = len(LOGIN_LIST)
-    re = 'returncode=1&returnmsg=%d'%(online_number);
+    re = 'returncode=1&returnmsg=%d'%(online_number)
     
     send_http_resp(conn,re)
   
@@ -255,19 +284,30 @@ def worker(no,conn):
     except:
         pass
 
-def myrecv(conn):
-    for i in range(10):
+def myrecv(conn,count,bytes):
+    #logging.info('myrecv...')
+    for i in range(count):
         #logging.info("i:%d"%(i))
         try:
-            resp = conn.recv(2,socket.MSG_DONTWAIT)
+            resp = conn.recv(bytes,socket.MSG_DONTWAIT)
             #resp = conn.recv(20)
-            if(resp == 'on'):
-                return True
-            else:
-                time.sleep(0.2)
+            return resp
         except:
-            time.sleep(0.2)
-    return False
+            time.sleep(1)
+    return 'timeout'
+
+def send_heartbeat(index):
+    if(LOGIN_LIST[index][2] == 1):
+        return
+    
+    LOGIN_LIST[index][2] = 1
+    LOGIN_LIST[index][1].send("heartbeat")
+    re = myrecv(LOGIN_LIST[index][1],3,8)
+    LOGIN_LIST[index][2] = 0
+    if( re == 'on'):
+        return
+    else:
+        raise Exception
     
 def checker():
     global LOGIN_LIST
@@ -277,13 +317,10 @@ def checker():
             try:
                 #logging.info("checking %s"%(LOGIN_LIST[index][0]))
                 #no need to check when other cmd is running
-                if(LOGIN_LIST[index][2] == 1):
-                    continue
-                LOGIN_LIST[index][1].send("heartbeat")
                 
-                if(myrecv(LOGIN_LIST[index][1]) == False):
-                    raise Exception
-                #logging.info("ok!");
+                send_heartbeat(index)
+                
+                #logging.info("ok!")
             except:
                 logging.info("%s detached!"%(LOGIN_LIST[index][0]))
                 del LOGIN_LIST[index]
@@ -323,7 +360,7 @@ def init_env():
     
         
 def main():
-    
+    global timeout
     init_env()
     logging.info("starting...")
     
@@ -332,7 +369,7 @@ def main():
     skt.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     skt.bind(('',9999))
     skt.listen(5)
-    skt.settimeout(40)
+    skt.settimeout(10)
     
     c = threading.Thread(target=checker, args=())
     c.start()
