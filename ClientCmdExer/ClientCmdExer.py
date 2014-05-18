@@ -19,6 +19,7 @@ from VideoCapture import Device
 #function of Get CPU State  
 
 cmd = {}
+version = '1.08'
 
 
 def ftp_up(filename): 
@@ -48,7 +49,7 @@ def get_available_disk():
 	return int(psutil.disk_usage('c:')[2]/(1024*1024*1024))
 
 def get_version():
-    return "0.01"
+    return version
 
 def get_os():
     return platform.platform()
@@ -120,18 +121,37 @@ def get_camera_img():
 
 #===============
 def cmd_101():
-	return 'returncode=1&returnmsg=ok'	
-	
+	try:
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress root@115.28.134.72::application/ /cygdrive/C/umtouch/application/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'
+		print cmd
+		os.system(cmd)
+		return 'returncode=1&returnmsg=ok'	
+	except Exception, e:
+		return 'returncode=0&returnmsg=%s'%(e)	
 def cmd_102():
-	os.system('c:\www\\rsync.exe -vzrtopgu --progress --delete root@115.28.134.72::www /cygdrive/C/www/lsh --password-file=/cygdrive/C/www/rsync.pass')
-	os.system('c:\www\\rsync.exe -vzrtopgu --progress --delete root@115.28.134.72::uploadfile /cygdrive/C/www/uploadfile --password-file=/cygdrive/C/www/rsync.pass')
-	os.system('c:\www\\rsync.exe -vzrtopgu --progress --delete root@115.28.134.72::include /cygdrive/C/www/include --password-file=/cygdrive/C/www/rsync.pass')
-	return 'returncode=1&returnmsg=ok'
+	try:
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@115.28.134.72::www/ /cygdrive/C/umtouch/nginx/html/www/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'
+		print cmd
+		os.system(cmd)
+		
+		
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@115.28.134.72::uploadfile/ /cygdrive/C/umtouch/nginx/html/uploadfile/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'
+		print cmd
+		os.system(cmd)
+		
+		
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@115.28.134.72::include/%s /cygdrive/C/umtouch/nginx/html/include --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(community_id)
+		print cmd
+		os.system(cmd)
+	
+		
+		return 'returncode=1&returnmsg=ok'
+	except Exception, e:
+		return 'returncode=0&returnmsg=%s'%(e)
 
 
 	
 def cmd_103():
-	
 	status_info = {}
     
 	status_info['available_mem'] = get_available_mem()
@@ -181,17 +201,17 @@ def handler(data,sock):
 			
 def main():
    
-	cmd['101'] = 'cmd_101';
-	cmd['102'] = 'cmd_102';
-	cmd['103'] = 'cmd_103';
-	cmd['104'] = 'cmd_104';
-	cmd['105'] = 'cmd_105';
-	cmd['106'] = 'cmd_106';
-	cmd['107'] = 'cmd_107';
-	cmd['108'] = 'cmd_108';
+	cmd['101'] = 'cmd_101'
+	cmd['102'] = 'cmd_102'
+	cmd['103'] = 'cmd_103'
+	cmd['104'] = 'cmd_104'
+	cmd['105'] = 'cmd_105'
+	cmd['106'] = 'cmd_106'
+	cmd['107'] = 'cmd_107'
+	cmd['108'] = 'cmd_108'
 	
 	
-
+	null_count=0
 	while True:
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
 		sock.settimeout(30)
@@ -209,10 +229,13 @@ def main():
 					data = sock.recv(1024) 
 					print 'Received: ', data
 					if(data == ''):
-						print 'recv null'
-						break
+						null_count += 1
+						if(null_count > 4):
+							raise Exception
+						else:
+							continue
 					#print cmd
-					
+					null_count=0
 					
 						
 					if(data == 'quit'):
@@ -221,11 +244,12 @@ def main():
 						sys.exit(0)
 						
 					if(data == 'heartbeat'):
-						sock.send('on')
+						print 'sendlen:%d'%(sock.send('on'))
 						continue
 						
 					if(cmd.has_key(data)):
-						threading.Thread(target=handler, args=(data,sock)).start()
+						#threading.Thread(target=handler, args=(data,sock)).start()
+						handler(data,sock)
 				
 				except Exception, e:
 					print e
