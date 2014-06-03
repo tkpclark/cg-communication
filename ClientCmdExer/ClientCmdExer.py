@@ -19,9 +19,34 @@ from VideoCapture import Device
 #function of Get CPU State  
 
 cmd = {}
-version = '1.08'
+version = '1.12'
 
-
+class TimeoutError(Exception):  
+    pass  
+  
+def command(cmd, timeout=60):  
+    """Run command and return the output 
+    cmd - the command to run 
+    timeout - max seconds to wait for 
+    """  
+    is_linux = platform.system() == 'Linux'  
+      
+    p = subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid if is_linux else None)  
+    t_beginning = time.time()  
+    seconds_passed = 0  
+    while True:  
+        if p.poll() is not None:  
+            break  
+        seconds_passed = time.time() - t_beginning  
+        if timeout and seconds_passed > timeout:  
+            if is_linux:  
+                os.killpg(p.pid, signal.SIGTERM)  
+            else:  
+                p.terminate()  
+            raise TimeoutError(cmd, timeout)  
+        time.sleep(0.1)  
+    return p.stdout.read()  
+    
 def ftp_up(filename): 
     ftp=FTP()
     ftp.set_debuglevel(2)
@@ -124,7 +149,7 @@ def cmd_101():
 	try:
 		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress root@115.28.134.72::application/ /cygdrive/C/umtouch/application/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'
 		print cmd
-		os.system(cmd)
+		command(cmd, timeout=300)  
 		return 'returncode=1&returnmsg=ok'	
 	except Exception, e:
 		return 'returncode=0&returnmsg=%s'%(e)	
@@ -132,17 +157,17 @@ def cmd_102():
 	try:
 		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@115.28.134.72::www/ /cygdrive/C/umtouch/nginx/html/www/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'
 		print cmd
-		os.system(cmd)
+		command(cmd, timeout=300) 
 		
 		
 		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@115.28.134.72::uploadfile/ /cygdrive/C/umtouch/nginx/html/uploadfile/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'
 		print cmd
-		os.system(cmd)
+		command(cmd, timeout=300) 
 		
 		
-		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@115.28.134.72::include/%s /cygdrive/C/umtouch/nginx/html/include --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(community_id)
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@115.28.134.72::include/%s/ /cygdrive/C/umtouch/nginx/html/include/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(community_id)
 		print cmd
-		os.system(cmd)
+		command(cmd, timeout=300) 
 	
 		
 		return 'returncode=1&returnmsg=ok'
@@ -170,7 +195,13 @@ def cmd_103():
 	return 'returncode=1&returnmsg=%s'%(status_info)
 
 def cmd_104():
-	return 'returncode=1&returnmsg=ok'
+	try:
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress  /cygdrive/C/umtouch/log/ root@115.28.134.72::log/%s/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(terminal_number)
+		print cmd
+		command(cmd, timeout=300) 
+		return 'returncode=1&returnmsg=ok'	
+	except Exception, e:
+		return 'returncode=0&returnmsg=%s'%(e)	
 
 def cmd_105():
 	os.system("taskkill /IM chrome.exe") 
@@ -183,10 +214,7 @@ def cmd_106():
 def cmd_107():
 	os.system("shutdown -f -s -t 0")
 	return 'returncode=1&returnmsg=ok'
-	
-def cmd_108():
-	global version
-	return 'returncode=1&returnmsg=%s'%(version)
+
 
 def handler(data,sock):
 	print 'workder'
@@ -210,6 +238,7 @@ def main():
 	cmd['107'] = 'cmd_107'
 	cmd['108'] = 'cmd_108'
 	
+	print version
 	
 	null_count=0
 	while True:

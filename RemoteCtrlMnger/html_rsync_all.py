@@ -24,14 +24,14 @@ def get_net_element():
 	mysql.close()
 	return re
 
-def collect(n, number):
-	url = "http://%s:9999/?target=%s&cmd=103"%(CDN_SERVER, number)
+def rsync(n, number):
+	url = "http://%s:9999/?target=%s&cmd=102"%(CDN_SERVER, number)
 	logging.info(url)
 	opener = urllib2.build_opener()
 	try:
 		file = opener.open(url,timeout=100)
 		resp = file.read()
-		logging.info("resp:" + resp)
+		logging.info(number + " resp:" + resp)
 	except Exception, e:
 		logging.info(e)
 		
@@ -39,11 +39,11 @@ def routin():
 	net_elements = get_net_element()
 	for net_element in net_elements: 
 		#os.system("/usr/bin/python collect_one.py " + net_element['number'] + " " + net_element['ip'])
-		t= threading.Thread(target=collect, args=(1,net_element['number']))
+		t= threading.Thread(target=rsync, args=(1,net_element['number']))
 		t.start()
 
 def routin_sleep():
-	sql = "select check_interval from lich_system_config"
+	sql = "select html_rsync_interval from lich_system_config"
 	try:
 		mysql = Mydb(host, user, password)
 		mysql.selectDb(db_name)
@@ -53,11 +53,11 @@ def routin_sleep():
 	except Exception, e:
 		logging.info(e)
 	mysql.close()
-	time.sleep(string.atoi(re[0]['check_interval']))
+	time.sleep(string.atoi(re[0]['html_rsync_interval']))
 		
 def main():
 	
-	logfile = '/var/log/collect.log'
+	logfile = '/var/log/rsync.log'
 	Rthandler = RotatingFileHandler(logfile, maxBytes=10*1024*1024,backupCount=5)
 	formatter = logging.Formatter('[%(asctime)s][%(levelname)s][1.01]:  %(message)s - %(filename)s:%(lineno)d')
 	Rthandler.setFormatter(formatter)
