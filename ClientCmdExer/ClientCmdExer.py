@@ -19,19 +19,19 @@ from VideoCapture import Device
 #function of Get CPU State  
 
 cmd = {}
-version = '1.12'
+version = '1.13'
 
 class TimeoutError(Exception):  
     pass  
   
-def command(cmd, timeout=60):  
+def command(cmd, timeout):  
     """Run command and return the output 
     cmd - the command to run 
     timeout - max seconds to wait for 
     """  
     is_linux = platform.system() == 'Linux'  
       
-    p = subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True, preexec_fn=os.setsid if is_linux else None)  
+    p = subprocess.Popen(cmd, stderr=None, stdout=None, shell=True, preexec_fn=os.setsid if is_linux else None)  
     t_beginning = time.time()  
     seconds_passed = 0  
     while True:  
@@ -41,11 +41,13 @@ def command(cmd, timeout=60):
         if timeout and seconds_passed > timeout:  
             if is_linux:  
                 os.killpg(p.pid, signal.SIGTERM)  
+                print 'linux'
             else:  
-                p.terminate()  
-            raise TimeoutError(cmd, timeout)  
+                p.terminate()
+                p.kill()
+                print 'windows'  
+            print 'timeout!'
         time.sleep(0.1)  
-    return p.stdout.read()  
     
 def ftp_up(filename): 
     ftp=FTP()
@@ -147,27 +149,27 @@ def get_camera_img():
 #===============
 def cmd_101():
 	try:
-		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress root@115.28.134.72::application/ /cygdrive/C/umtouch/application/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress root@%s::application/ /cygdrive/C/umtouch/application/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(server_ip)
 		print cmd
-		command(cmd, timeout=300)  
+		command(cmd, 1000)  
 		return 'returncode=1&returnmsg=ok'	
 	except Exception, e:
 		return 'returncode=0&returnmsg=%s'%(e)	
 def cmd_102():
 	try:
-		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@115.28.134.72::www/ /cygdrive/C/umtouch/nginx/html/www/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@%s::www/ /cygdrive/C/umtouch/nginx/html/www/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(server_ip)
 		print cmd
-		command(cmd, timeout=300) 
+		command(cmd, 1000) 
 		
 		
-		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@115.28.134.72::uploadfile/ /cygdrive/C/umtouch/nginx/html/uploadfile/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@%s::uploadfile/ /cygdrive/C/umtouch/nginx/html/uploadfile/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(server_ip)
 		print cmd
-		command(cmd, timeout=300) 
+		command(cmd, 1000) 
 		
 		
-		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@115.28.134.72::include/%s/ /cygdrive/C/umtouch/nginx/html/include/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(community_id)
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@%s::include/%s/ /cygdrive/C/umtouch/nginx/html/include/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(server_ip,community_id)
 		print cmd
-		command(cmd, timeout=300) 
+		command(cmd, 1000) 
 	
 		
 		return 'returncode=1&returnmsg=ok'
@@ -196,7 +198,7 @@ def cmd_103():
 
 def cmd_104():
 	try:
-		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress  /cygdrive/C/umtouch/log/ root@115.28.134.72::log/%s/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(terminal_number)
+		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress  /cygdrive/C/umtouch/log/ root@%s::log/%s/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(server_ip,terminal_number)
 		print cmd
 		command(cmd, timeout=300) 
 		return 'returncode=1&returnmsg=ok'	
