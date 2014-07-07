@@ -2,7 +2,7 @@
 terminal_number = 'T55-clark'
 community_id = '14'
 server_ip = '115.28.134.72'
-server_port = 9999
+server_port = 10008
 ftp_server = '115.28.134.72'
 ftp_port = '21'
 ftp_username = 'tkp'

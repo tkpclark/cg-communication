@@ -1,4 +1,4 @@
-#encoding:utf-8
+#encoding:gb18030
 import socket
 import time
 import os
@@ -13,13 +13,15 @@ from config import *
 import threading
 import multiprocessing
 import re
-from VideoCapture import Device  
+from VideoCapture import Device
+import struct 
 
 
 #function of Get CPU State  
 
 cmd = {}
-version = '1.13'
+version = '2.05'
+server_cmd_len=10
 
 class TimeoutError(Exception):  
     pass  
@@ -110,7 +112,7 @@ def get_bandwidth():
 	#print os.path.getsize(tmp_file)
 	time.sleep(0.1)
 	#os.system("rm %s -f"%(tmp_file))
-	os.system("del %s -f"%(tmp_file))
+	os.system("del file.tmp.* -f")
 	return '%dK/s'%(bandwidth)
 	
 def get_snapshot():
@@ -120,7 +122,7 @@ def get_snapshot():
 	filename = '%s.%s.snap.jpg'%(terminal_number, time.time())
 	img.save(filename)
 	ftp_up(filename)
-	os.system('del %s'%(filename))
+	os.system('del %s.*.jpg'%(terminal_number))
 	
 	
 	return filename
@@ -139,7 +141,7 @@ def get_camera_img():
 		p.start()
 		p.join()
 		ftp_up(filename)
-		os.system('del %s'%(filename))
+		os.system('del *.camera.jpg')
 		return filename
 	except:
 		return 'fail.jpg'
@@ -151,7 +153,7 @@ def cmd_101():
 	try:
 		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress root@%s::application/ /cygdrive/C/umtouch/application/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(server_ip)
 		print cmd
-		command(cmd, 1000)  
+		os.system(cmd)
 		return 'returncode=1&returnmsg=ok'	
 	except Exception, e:
 		return 'returncode=0&returnmsg=%s'%(e)	
@@ -159,17 +161,17 @@ def cmd_102():
 	try:
 		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@%s::www/ /cygdrive/C/umtouch/nginx/html/www/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(server_ip)
 		print cmd
-		command(cmd, 1000) 
+		os.system(cmd)
 		
 		
 		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@%s::uploadfile/ /cygdrive/C/umtouch/nginx/html/uploadfile/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(server_ip)
 		print cmd
-		command(cmd, 1000) 
+		os.system(cmd)
 		
 		
 		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress --delete root@%s::include/%s/ /cygdrive/C/umtouch/nginx/html/include/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(server_ip,community_id)
 		print cmd
-		command(cmd, 1000) 
+		os.system(cmd) 
 	
 		
 		return 'returncode=1&returnmsg=ok'
@@ -200,13 +202,13 @@ def cmd_104():
 	try:
 		cmd=r'c:\umtouch\rsync\rsync.exe -cvzrtopgu --progress  /cygdrive/C/umtouch/log/ root@%s::log/%s/ --password-file=/cygdrive/C/umtouch/rsync/rsync.pass'%(server_ip,terminal_number)
 		print cmd
-		command(cmd, timeout=300) 
+		os.system(cmd)
 		return 'returncode=1&returnmsg=ok'	
 	except Exception, e:
 		return 'returncode=0&returnmsg=%s'%(e)	
 
 def cmd_105():
-	os.system("taskkill /IM chrome.exe") 
+	os.system("taskkill /F /IM chrome.exe") 
 	return 'returncode=1&returnmsg=ok'
 
 def cmd_106():
@@ -217,16 +219,30 @@ def cmd_107():
 	os.system("shutdown -f -s -t 0")
 	return 'returncode=1&returnmsg=ok'
 
-
+def heartbeat():
+	return 'on'
+	
 def handler(data,sock):
-	print 'workder'
 	try:
-		re = eval(cmd[data]+"()")
-		print re
-		print 'sendlen:%d'%(sock.send(re))
+		taskid,_cmd = struct.unpack('i6s',data)
+		_cmd=_cmd.strip('\x00')
+		print '[recv]taskid:%d,cmd:%s'%(taskid,_cmd)
+	except:
+		print 'data format error!'
+		return
+		
+	try:
+		re = eval(cmd[_cmd]+"()")
+		
 	except Exception, e:
-		print e
-		sock.send('returncode=0&returnmsg=内部错误:[%s]'%(e))
+		re='returncode=0&returnmsg=terminal error:[%s]'%(e)
+		
+		
+	finally:
+		
+		send_str=struct.pack('i496s',taskid,re)
+		len=sock.send(send_str)
+		print '[send]taskid:%d,reply:%s,len:%d'%(taskid,re,len)
 
 			
 def main():
@@ -238,7 +254,7 @@ def main():
 	cmd['105'] = 'cmd_105'
 	cmd['106'] = 'cmd_106'
 	cmd['107'] = 'cmd_107'
-	cmd['108'] = 'cmd_108'
+	cmd['hb']='heartbeat'
 	
 	print version
 	
@@ -249,16 +265,17 @@ def main():
 		try:
 			print 'connecting %s...'%(server_ip)
 			sock.connect((server_ip, server_port))  
-			sock.send('login,%s'%(terminal_number))
-			data = sock.recv(32)
-			print data
-			if(data != 'ok'):
+			sock.send('login,%s,%s'%(terminal_number,version))
+			data = sock.recv(10)
+			#print data
+			if(data == 'ok'):
+				print 'login successfully!'
+			else:
 				raise Exception
 				
 		  	while True:
 		  		try:
-					data = sock.recv(1024) 
-					print 'Received: ', data
+					data = sock.recv(server_cmd_len)
 					if(data == ''):
 						null_count += 1
 						if(null_count > 4):
@@ -273,14 +290,9 @@ def main():
 						print 'your number is logging somewhere else'
 						time.sleep(3)
 						sys.exit(0)
-						
-					if(data == 'heartbeat'):
-						print 'sendlen:%d'%(sock.send('on'))
-						continue
-						
-					if(cmd.has_key(data)):
-						#threading.Thread(target=handler, args=(data,sock)).start()
-						handler(data,sock)
+
+					threading.Thread(target=handler, args=(data,sock)).start()
+						#handler(data,sock)
 				
 				except Exception, e:
 					print e
