@@ -123,6 +123,12 @@ def recv_connections():
             if(tasks.has_key(task_id)):
                 tasks[task_id]['resp']=result
         #logging.info(tasks)
+def recv_connections_iternal():
+    while True:
+        try:
+            recv_connections()
+        except Exception, e:
+            logging.info(e)
 def read_response(task_id):
     count=0
     while True:
@@ -134,7 +140,7 @@ def read_response(task_id):
         else:
             time.sleep(0.1)
             count+=1
-            if(count > 10000):
+            if(count > 360000):
                 raise Exception
 def get_task_id():
     global taskid_seek
@@ -346,7 +352,13 @@ def checker():
                         
         time.sleep(5)
 
-
+def checker_iternal():
+    while True:
+        try:
+            checker()
+        except Exception, e:
+            logging.info(e)
+        
 def init_env():
     
     #chdir
@@ -355,7 +367,7 @@ def init_env():
     #init logging
     logfile = '/var/log/RomoteCtrlMnger_epoll.log'
     Rthandler = RotatingFileHandler(logfile, maxBytes=10*1024*1024,backupCount=5)
-    formatter = logging.Formatter('[%(asctime)s][%(levelname)s][1.01]:  %(message)s - %(filename)s:%(lineno)d')
+    formatter = logging.Formatter('[%(asctime)s][%(levelname)s][1.02]:  %(message)s - %(filename)s:%(lineno)d')
     Rthandler.setFormatter(formatter)
     logger=logging.getLogger()
     logger.addHandler(Rthandler)
@@ -375,10 +387,10 @@ def main():
     skt.listen(5)
     skt.settimeout(1)
     
-    c = threading.Thread(target=checker, args=())
+    c = threading.Thread(target=checker_iternal, args=())
     c.start()
     
-    d = threading.Thread(target=recv_connections, args=())
+    d = threading.Thread(target=recv_connections_iternal, args=())
     d.start()
     
     while 1:
