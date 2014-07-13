@@ -267,6 +267,7 @@ def do_login_request(conn, r):
     connections[terminal_number]['login_time']=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     connections[terminal_number]['version']=terminal_version
     connections[terminal_number]['fileno']=conn.fileno()
+    connections[terminal_number]['hb_fail']=0
     epoll.register(conn.fileno(), select.EPOLLIN)
     
     #logging.info(connections)
@@ -281,7 +282,7 @@ def do_online_list(conn,r):
     re ='当前时间:%s\t\t在线终端数量:%d<br><hr>'%(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),online_number)
     for (k,v) in connections.items():
         #客户端名称
-        re += '终端:<font color=red size=4>%s</font>, 登陆时间:%s, version:%s<br> 正在执行任务:<br>'%(k,connections[k]['login_time'],connections[k]['version'])
+        re += '终端:<font color=red size=4>%s</font>, 登陆时间:%s, version:%s, 心跳检测连续失败次数:%d<br> 正在执行任务:<br>'%(k,connections[k]['login_time'],connections[k]['version'],connections[k]['hb_fail'])
         for mk,mv in tasks.items():
             if(tasks[mk]['target']==k):
                 re += '[任务ID:%s,执行终端:%s,命令:%s,开始时间:%s,执行结果:%s] <br>'%(mk,tasks[mk]['target'],tasks[mk]['cmd'],tasks[mk]['time'],tasks[mk]['resp'])
@@ -323,32 +324,51 @@ def worker(no,conn):
         pass
 
 
-
+def hb_fail(terminal_number):
+    connections[terminal_number]['hb_fail'] += 1
+    if(connections[terminal_number]['hb_fail'] >= 3):
+        logging.info("%s detached!"%(terminal_number))
+        clear_terminal(terminal_number)
+        
 def checker():
     heartbeat_cmd='hb'
     
     while True:
         heartbeat_task_list=[]
+        
+        #把connections里的每一个连接就发送心跳
         for (k,v) in connections.items():
             task_id = get_task_id()
             try:
                 send_request(task_id,heartbeat_cmd, k)
                 heartbeat_task_list.append(task_id)
             except Exception, e:
-                logging.info("%s detached!"%(k))
-                clear_terminal(k)
+                hb_fail(k)
                 
             
         
         time.sleep(3)
+        #检查心跳结果
         for task_id in heartbeat_task_list:
+            terminal_number=tasks[task_id]['target']
+            
             if(tasks[task_id]['resp']!='on'):
-                logging.info("%s detached!"%(tasks[task_id]['target']))
-                clear_terminal(tasks[task_id]['target'])
+                hb_fail(terminal_number)
             try:
                 del tasks[task_id]
+                connections[terminal_number]['hb_fail']=0
             except:
                 pass
+                   
+        #刚检查完心跳结果，按说tasks中应该再没有心跳任务了，如果有则可能是之前except遗留的
+        #所以检查是否有遗留的checker任务，有则清除
+        for (k,v) in tasks.items():
+            if(tasks[k]['cmd']=='hb'):
+                try:
+                    del tasks[k]
+                except:
+                    pass
+             
                         
         time.sleep(5)
 
@@ -367,7 +387,7 @@ def init_env():
     #init logging
     logfile = '/var/log/RomoteCtrlMnger_epoll.log'
     Rthandler = RotatingFileHandler(logfile, maxBytes=10*1024*1024,backupCount=5)
-    formatter = logging.Formatter('[%(asctime)s][%(levelname)s][1.02]:  %(message)s - %(filename)s:%(lineno)d')
+    formatter = logging.Formatter('[%(asctime)s][%(levelname)s][1.03]:  %(message)s - %(filename)s:%(lineno)d')
     Rthandler.setFormatter(formatter)
     logger=logging.getLogger()
     logger.addHandler(Rthandler)
